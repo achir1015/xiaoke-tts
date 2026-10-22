@@ -6,7 +6,7 @@ import { db, prefs, sha1 } from "./store.js";
 import { EMOTIONS, LANG_NAMES, CLOUD_SPACES, splitText, makeEngine } from "./engines.js";
 import { listVoices, sampleBlob, saveSample, addCustom, removeVoice, invalidate as invalidateVoices } from "./voices.js";
 import { ScriptParser, NovelConverter, allLines, speakers, mixScript, TEMPLATES } from "./drama.js";
-import { AMBIENCES, SFX, makeAmbience, makeSfx } from "./sounds.js";
+import { AMBIENCES, AMB_ALIASES, SFX, makeAmbience, makeSfx } from "./sounds.js";
 import * as P from "./project.js";
 import { tagMp3, coverJpeg } from "./id3.js";
 
@@ -18,6 +18,10 @@ const safeName = s => (s || "語音").replace(/[\\/:*?"<>|\r\n]/g, "_").slice(0,
 let toastTimer;
 function toast(msg, ms = 2600) { const t = $("#toast"); t.textContent = msg; t.classList.remove("hide"); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.add("hide"), ms); }
 function showErr(el, msg) { el.textContent = msg || ""; el.classList.toggle("hide", !msg); }
+
+const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const isTouch = matchMedia("(pointer: coarse)").matches;
+const isStandalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
 
 let S = P.settings();
 let engine = makeEngine(engineOpts());
@@ -44,9 +48,32 @@ $("#engineChip").onclick = () => showTab("settings");
 // 播放（同時間只播一個）
 // ------------------------------------------------------------
 const player = new Audio();
+player.setAttribute("playsinline", "");
 let srcNode = null;
+
+// iPhone／iPad：聲音一定要在「手指點下去」的當下先啟動一次，之後非同步產生的聲音才放得出來
+function unlockAudio() {
+  const ctx = audioCtx();
+  ctx.resume().catch(() => { });
+  const b = ctx.createBuffer(1, 1, 22050), s = ctx.createBufferSource();
+  s.buffer = b; s.connect(ctx.destination); s.start();
+  player.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAIlYAAESsAAACABAAZGF0YQAAAAA=";
+  player.play().then(() => player.pause()).catch(() => { });
+  ["touchend", "click", "keydown"].forEach(ev => document.removeEventListener(ev, unlockAudio, true));
+}
+["touchend", "click", "keydown"].forEach(ev => document.addEventListener(ev, unlockAudio, true));
+
+// 產生語音時讓手機螢幕保持亮著（螢幕關掉，瀏覽器會把網頁暫停）
+let wakeLock = null;
+async function keepAwake(on) {
+  try {
+    if (on && "wakeLock" in navigator && !wakeLock) { wakeLock = await navigator.wakeLock.request("screen"); wakeLock.addEventListener("release", () => wakeLock = null); }
+    if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+  } catch { }
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && busy()) keepAwake(true); });
 function stopAll() { player.pause(); if (srcNode) { try { srcNode.stop(); } catch { } srcNode = null; } $$(".playing").forEach(b => b.classList.remove("playing")); }
-async function playBlob(blob) { stopAll(); if (player.src) URL.revokeObjectURL(player.src); player.src = URL.createObjectURL(blob); await player.play(); }
+async function playBlob(blob) { stopAll(); if (player.src.startsWith("blob:")) URL.revokeObjectURL(player.src); player.src = URL.createObjectURL(blob); await player.play(); }
 function playChannels(ch, sr, btn) {
   stopAll();
   const ctx = audioCtx(); ctx.resume();
@@ -141,9 +168,15 @@ async function assetAudio(name, kinds) {
   return assetCache.get(a.id);
 }
 
+const BABBLE = ["菜市場", "人群嘈雜", "會議廳", "咖啡廳"];
+/** 只有菜市場、人群這類背景才需要聲音樣本（手機省記憶體） */
+async function babbleVoices(names) {
+  const need = names.filter(Boolean).flatMap(n => n.split(/[+＋、]/)).some(n => BABBLE.includes(AMB_ALIASES[n.trim()] || n.trim()));
+  return need ? voiceBuffers() : [];
+}
 let _voiceBufs = null;
 async function voiceBuffers() {         // 做「人群聲」用：內建聲音樣本
-  if (!_voiceBufs) _voiceBufs = Promise.all(voices.filter(v => v.builtin).map(v => sampleBlob(v.id).then(b => b.arrayBuffer()).then(b => audioCtx().decodeAudioData(b)).catch(() => null))).then(a => a.filter(Boolean));
+  if (!_voiceBufs) _voiceBufs = Promise.all(voices.filter(v => v.builtin).slice(0, isTouch ? 6 : 11).map(v => sampleBlob(v.id).then(b => b.arrayBuffer()).then(b => audioCtx().decodeAudioData(b)).catch(() => null))).then(a => a.filter(Boolean));
   return _voiceBufs;
 }
 
@@ -165,14 +198,16 @@ async function finishMp3({ channels, sr, kbps, title, kind, text, voiceName, cov
   let saved = false;
   if (S.saveToFolder && P.folderLinked()) saved = await P.saveOutput(mp3, filename).catch(() => false);
   const url = URL.createObjectURL(mp3);
+  const shareFile = new File([mp3], filename, { type: "audio/mpeg" });
+  const canShareFile = !!(navigator.canShare && navigator.canShare({ files: [shareFile] }));
   resultEl.innerHTML = `<b>✅ 完成：${esc(title)}</b>（${fmtT(seconds)}，${(mp3.size / 1024 / 1024).toFixed(2)} MB）
     <audio controls src="${url}"></audio>
-    <div class="row"><a class="btnlink" href="${url}" download="${esc(filename)}"><button class="primary">⬇ 下載 MP3</button></a>
-    ${navigator.canShare ? `<button class="ghost share">分享</button>` : ""}
+    <div class="row">${canShareFile ? `<button class="${isTouch ? "primary" : "ghost"} share">📤 ${isIOS ? "分享／儲存到檔案" : "分享"}</button>` : ""}
+    <a class="btnlink" href="${url}" download="${esc(filename)}"><button class="${canShareFile && isTouch ? "ghost" : "primary"}">⬇ 下載 MP3</button></a>
     ${saved ? `<span class="hint">已存到專案資料夾「輸出」</span>` : ""}</div>`;
   resultEl.classList.remove("hide");
   const sh = resultEl.querySelector(".share");
-  if (sh) sh.onclick = () => { const f = new File([mp3], filename, { type: "audio/mpeg" }); navigator.canShare({ files: [f] }) ? navigator.share({ files: [f], title }).catch(() => { }) : toast("這台裝置不能分享檔案"); };
+  if (sh) sh.onclick = () => navigator.share({ files: [shareFile], title }).catch(() => { });
   resultEl.querySelector("audio").play().catch(() => { });
   return rec;
 }
@@ -255,7 +290,7 @@ $("#ttsPreviewBg").onclick = async e => {
   const btn = e.target;
   const ch = [new Float32Array(8 * 44100), new Float32Array(8 * 44100)];
   let any = false;
-  if (S.ambience) { const a = await makeAmbience(S.ambience, 8, await voiceBuffers(), 1); if (a) { any = true; a.forEach((c, i) => { for (let k = 0; k < ch[i].length; k++) ch[i][k] += c[k] * S.ambienceVolume * 2.2; }); } }
+  if (S.ambience) { const a = await makeAmbience(S.ambience, 8, await babbleVoices([S.ambience]), 1); if (a) { any = true; a.forEach((c, i) => { for (let k = 0; k < ch[i].length; k++) ch[i][k] += c[k] * S.ambienceVolume * 2.2; }); } }
   if (S.music) { const m = await assetAudio(S.music, ["music"]); if (m) { any = true; for (let i = 0; i < 2; i++) { const d = m.getChannelData(Math.min(i, m.numberOfChannels - 1)); for (let k = 0; k < ch[i].length && k < d.length * 44100 / m.sampleRate; k++) ch[i][k] += d[Math.floor(k * m.sampleRate / 44100)] * S.musicVolume * 1.6; } } }
   if (!any) return toast("還沒選背景音樂或環境音");
   playChannels(ch, 44100, btn);
@@ -270,7 +305,7 @@ $("#ttsGo").onclick = async () => {
   const prog = progressUI($("#ttsProg"));
   showErr($("#ttsErr"), ""); $("#ttsResult").classList.add("hide");
   tts.abort = new AbortController();
-  $("#ttsGo").disabled = true; $("#ttsStop").classList.remove("hide");
+  $("#ttsGo").disabled = true; $("#ttsStop").classList.remove("hide"); keepAwake(true);
   const t0 = Date.now();
   try {
     const parts = [];
@@ -293,7 +328,7 @@ $("#ttsGo").onclick = async () => {
       if (S.music) script.events.push({ kind: "music", name: S.music, volume: S.musicVolume });
       script.events.push({ kind: "pause", seconds: 0.8 }, { kind: "line", speaker: "旁白", text });
       const sp = { data: speech, sr };
-      channels = await mixScript({ script, audioOf: () => sp, pace: "一般", room: "無", ambienceVolume: 1, musicVolume: 1, voiceBuffers: await voiceBuffers(), assetAudio });
+      channels = await mixScript({ script, audioOf: () => sp, pace: "一般", room: "無", ambienceVolume: 1, musicVolume: 1, voiceBuffers: await babbleVoices([S.ambience]), assetAudio });
       outSr = 44100;
     } else { channels = normalize([speech]); outSr = sr; }
     await finishMp3({ channels, sr: outSr, kbps: S.bitrate, title: text.replace(/\s+/g, " ").slice(0, 16), kind: "tts", text, voiceName: v.name, cover: S.cover, resultEl: $("#ttsResult"), progress: prog });
@@ -301,7 +336,7 @@ $("#ttsGo").onclick = async () => {
   } catch (e) {
     if (e.name === "AbortError") { prog(0, "已取消"); }
     else { showErr($("#ttsErr"), e.message); $("#ttsProg").classList.add("hide"); }
-  } finally { $("#ttsGo").disabled = false; $("#ttsStop").classList.add("hide"); }
+  } finally { $("#ttsGo").disabled = false; $("#ttsStop").classList.add("hide"); keepAwake(false); }
 };
 $("#ttsStop").onclick = () => tts.abort && tts.abort.abort();
 
@@ -388,8 +423,8 @@ function dramaParse() {
     return `<tr data-n="${esc(n)}"><td><b>${esc(n)}</b></td>
       <td><select data-k="voice_id">${ready.map(v => `<option value="${esc(v.id)}" ${v.id === c.voice_id ? "selected" : ""}>${esc(v.name)}</option>`).join("")}</select></td>
       <td><select data-k="language">${langs.map(l => `<option value="${l}" ${l === c.language ? "selected" : ""}>${LANG_NAMES[l].replace("（實驗性）", "")}</option>`).join("")}${langs.includes(c.language) ? "" : `<option value="${c.language}" selected>${LANG_NAMES[c.language]}（目前引擎不支援）</option>`}</select></td>
-      <td><input type="range" data-k="pan" min="-1" max="1" step="0.1" value="${c.pan}"></td>
-      <td><input type="range" data-k="volume" min="0.3" max="1.6" step="0.1" value="${c.volume}"></td></tr>`;
+      <td data-l="左 ↔ 右"><input type="range" data-k="pan" min="-1" max="1" step="0.1" value="${c.pan}"></td>
+      <td data-l="音量"><input type="range" data-k="volume" min="0.3" max="1.6" step="0.1" value="${c.volume}"></td></tr>`;
   }).join("");
   $$("#castTable [data-k]").forEach(el => el.onchange = () => {
     const n = el.closest("tr").dataset.n;
@@ -410,7 +445,7 @@ $("#dGo").onclick = async () => {
   const prog = progressUI($("#dProg"));
   showErr($("#dErr"), ""); $("#dResult").classList.add("hide");
   dstate.abort = new AbortController();
-  $("#dGo").disabled = true; $("#dStop").classList.remove("hide");
+  $("#dGo").disabled = true; $("#dStop").classList.remove("hide"); keepAwake(true);
   const t0 = Date.now();
   try {
     // 同一個聲音的句子排在一起做
@@ -439,14 +474,14 @@ $("#dGo").onclick = async () => {
     const channels = await mixScript({
       script: s, audioOf: ln => audio.get(ln), pace: dstate.pace, room: dstate.room,
       ambienceVolume: S.dramaAmbienceVolume, musicVolume: S.dramaMusicVolume,
-      voiceBuffers: await voiceBuffers(), assetAudio, onStep: t => prog(0.9, t),
+      voiceBuffers: await babbleVoices(s.events.filter(e => e.kind === "ambience").map(e => e.name)), assetAudio, onStep: t => prog(0.9, t),
     });
     await finishMp3({ channels, sr: 44100, kbps: S.bitrate, title, kind: "drama", text: dScript.value, voiceName: "", cover: S.cover, resultEl: $("#dResult"), progress: prog });
     prog(1, `完成，共 ${lines.length} 句，花 ${fmtT((Date.now() - t0) / 1000)}`);
   } catch (e) {
     if (e.name === "AbortError") prog(0, "已取消（做好的句子已記住，下次不用重做）");
     else { showErr($("#dErr"), e.message + "\n（已完成的句子都記住了，再按一次會從沒做完的地方繼續）"); $("#dProg").classList.add("hide"); }
-  } finally { $("#dGo").disabled = false; $("#dStop").classList.add("hide"); }
+  } finally { $("#dGo").disabled = false; $("#dStop").classList.add("hide"); keepAwake(false); }
 };
 $("#dStop").onclick = () => dstate.abort && dstate.abort.abort();
 
@@ -496,6 +531,11 @@ function recordDialog(name) {
     const close = (blob) => { clearInterval(timer); cancelAnimationFrame(raf); stream && stream.getTracks().forEach(t => t.stop()); micStream = null; dlg.classList.add("hide"); resolve(blob); };
     $("#recCancel").onclick = () => { if (rec && rec.state === "recording") { rec.onstop = null; rec.stop(); } close(null); };
     $("#recStart").onclick = async () => {
+      if (!window.MediaRecorder || !navigator.mediaDevices?.getUserMedia) {
+        close(null);
+        toast("這個瀏覽器不能直接錄音，請改用「上傳」（手機可以選錄音檔或直接錄）", 4000);
+        return;
+      }
       try { stream = micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }); }
       catch { toast("無法使用麥克風，請允許瀏覽器使用麥克風"); return close(null); }
       const ctx = audioCtx(); ctx.resume();
@@ -587,7 +627,7 @@ function renderSoundLib() {
     el.querySelectorAll("button").forEach(b => b.onclick = async () => {
       if (b.classList.contains("playing")) return stopAll();
       b.textContent = "⏳ " + b.dataset.n;
-      const ch = isAmb ? await makeAmbience(b.dataset.n, 8, await voiceBuffers(), 1) : await makeSfx(b.dataset.n, 1);
+      const ch = isAmb ? await makeAmbience(b.dataset.n, 8, await babbleVoices([b.dataset.n]), 1) : await makeSfx(b.dataset.n, 1);
       b.textContent = "▶ " + b.dataset.n;
       if (isAmb) ch.forEach(c => { for (let i = 0; i < c.length; i++) c[i] *= 2.2 * 0.5; });
       playChannels(ch, 44100, b);
@@ -671,6 +711,8 @@ async function renderStorage() {
   try { const e = await navigator.storage.estimate(); $("#sStorage").textContent = `這個網站已使用 ${(e.usage / 1024 / 1024).toFixed(1)} MB（產生紀錄、台詞快取、自訂聲音、匯入的素材）。`; } catch { }
 }
 
+$("#sInstallHint").textContent = isStandalone ? "✅ 已經安裝在這台裝置，正從主畫面開啟。"
+  : isIOS ? "這台是 iPhone／iPad：請用 Safari 開啟本網頁，按下方的「分享」→「加入主畫面」。" : "";
 let installEvt = null;
 window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvt = e; $("#sInstall").classList.remove("hide"); });
 $("#sInstall").onclick = async () => { if (!installEvt) return; installEvt.prompt(); await installEvt.userChoice; installEvt = null; $("#sInstall").classList.add("hide"); };
@@ -697,9 +739,6 @@ $("#sInstall").onclick = async () => { if (!installEvt) return; installEvt.promp
   if (q.get("tpl") && TEMPLATES[q.get("tpl")]) { dScript.value = ""; $(`[data-tpl=${q.get("tpl")}]`).click(); }
   showTab(q.get("tab") || prefs.get("tab", "tts"));
   checkEngine(false);
-  // 預先載入內建聲音（之後試聽、人群背景音都不用等）
-  const idle = window.requestIdleCallback || (f => setTimeout(f, 1500));
-  idle(() => voiceBuffers());
   if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js").catch(() => { });
 })();
 
@@ -712,6 +751,7 @@ window.addEventListener("pagehide", () => {
   tts.abort && tts.abort.abort();
   dstate.abort && dstate.abort.abort();
   stopAll();
+  keepAwake(false);
   micStream && micStream.getTracks().forEach(t => t.stop());
   try { audioCtx().close(); } catch { }
 });

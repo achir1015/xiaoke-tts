@@ -1,5 +1,8 @@
 // 音訊工具：解碼、重新取樣、去頭尾靜音、接句子、WAV/MP3 編碼。全部在瀏覽器裡做，不上傳。
 
+// 舊版 iPhone Safari 只有加 webkit 前綴的版本
+if (!window.OfflineAudioContext && window.webkitOfflineAudioContext) window.OfflineAudioContext = window.webkitOfflineAudioContext;
+
 let _ctx = null;
 export function audioCtx() {
   if (!_ctx) _ctx = new (window.AudioContext || window.webkitAudioContext)();

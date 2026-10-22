@@ -2,7 +2,7 @@
 <html lang="zh-Hant-TW">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <title>小柯機器人台灣語音 MP3 工具</title>
 <meta name="description" content="用 IndexTTS 產生台灣口音的 MP3：單一文字轉語音、多人劇本語音、自然環境音、背景音樂，免安裝直接在瀏覽器使用。">
 <meta name="theme-color" content="#0f766e">
@@ -26,12 +26,12 @@
 </header>
 
 <nav class="tabs" id="tabs">
-  <button data-tab="tts" class="on">🗣️ 單一語音</button>
-  <button data-tab="drama">🎭 劇本語音</button>
-  <button data-tab="voices">🎙️ 聲音範本</button>
-  <button data-tab="project">📁 專案素材</button>
-  <button data-tab="history">🕘 產生紀錄</button>
-  <button data-tab="settings">⚙️ 設定</button>
+  <button data-tab="tts" class="on"><i>🗣️</i><span>單一語音</span><em>單一</em></button>
+  <button data-tab="drama"><i>🎭</i><span>劇本語音</span><em>劇本</em></button>
+  <button data-tab="voices"><i>🎙️</i><span>聲音範本</span><em>聲音</em></button>
+  <button data-tab="project"><i>📁</i><span>專案素材</span><em>素材</em></button>
+  <button data-tab="history"><i>🕘</i><span>產生紀錄</span><em>紀錄</em></button>
+  <button data-tab="settings"><i>⚙️</i><span>設定</span><em>設定</em></button>
 </nav>
 <div id="folderBar" class="folderbar hide"></div>
 
@@ -238,6 +238,7 @@
       <h2>加到桌面／主畫面</h2>
       <p>把小柯語音像 App 一樣放在桌面或手機主畫面：</p>
       <button id="sInstall" class="primary hide">📲 安裝到這台裝置</button>
+      <p id="sInstallHint" class="hint"></p>
       <ul class="hint">
         <li><b>Windows / Mac（Chrome、Edge）</b>：網址列右邊的「安裝」圖示，或按上面的按鈕。</li>
         <li><b>iPhone / iPad（Safari）</b>：分享 →「加入主畫面」。</li>

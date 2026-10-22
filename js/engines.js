@@ -19,7 +19,8 @@ export const LANG_NAMES = { zh: "台灣國語", nan: "台語（實驗性）", en
 
 /** 長文切段：雲端 GPU 每次呼叫有時間上限，一段約 100 字最穩 */
 export function splitText(text, max = 100) {
-  const sents = text.replace(/\r/g, "").split(/(?<=[。！？!?；;\n])/).map(s => s.trim()).filter(Boolean);
+  // 不用 lookbehind 正規式：舊版 iPhone Safari（16.4 以前）看不懂，整個網頁會打不開
+  const sents = text.replace(/\r/g, "").replace(/([。！？!?；;\n])/g, "$1\u0000").split("\u0000").map(s => s.trim()).filter(Boolean);
   const out = [];
   let cur = "";
   for (let s of sents) {
