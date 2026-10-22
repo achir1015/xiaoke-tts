@@ -64,6 +64,14 @@ label.radio:has(input:checked) { border-color: var(--pri2); background: var(--so
 input[type=range] { padding: 0; border: 0; background: transparent; accent-color: var(--pri); }
 .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px 14px; margin-top: 10px; }
 .sub { margin: 4px 0 12px; }
+.tokenbox { margin: 12px 0 4px; padding: 12px; border: 1px solid var(--pri2); border-radius: 12px; background: var(--soft); }
+.tokenbox h3 { margin: 0 0 4px; color: var(--ink); }
+.tokenbox .row input { flex: 1; min-width: 0; font-family: ui-monospace, Consolas, monospace; }
+.tokenbox ol { padding-left: 20px; margin: 6px 0; }
+.tokenbox.need { animation: pulse 1.2s 2; }
+@keyframes pulse { 50% { box-shadow: 0 0 0 4px var(--pri2); } }
+label.radio span { flex: 1; min-width: 0; }
+.errbtn { display: block; margin-top: 8px; }
 .hint { font-size: 13px; color: var(--muted); margin: 6px 0; }
 
 button { font: inherit; cursor: pointer; border-radius: 10px; border: 1px solid var(--line); background: var(--chip); color: var(--ink); padding: 7px 14px; }
@@ -191,3 +199,4 @@ p.big { font-size: 22px; margin: 6px 0 14px; }
   .fields { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .kinds { grid-template-columns: minmax(0, 1fr); }
 }
+#sTokenMsg { white-space: pre-wrap; }

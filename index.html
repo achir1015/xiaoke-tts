@@ -218,21 +218,35 @@
     <div class="card">
       <h2>語音引擎</h2>
       <p class="hint">打開工具就會自動連線，不用安裝或執行任何程式；主引擎連不到時會自動改用備用引擎。關掉網頁就會停止。</p>
-      <label class="radio"><input type="radio" name="engine" value="cloud25"> <b>雲端 IndexTTS-2.5</b>（推薦）<br><small>官方 Hugging Face 示範空間；支援國語、英、日、西、阿拉伯文，可調語速。免費額度有限制。</small></label>
-      <label class="radio"><input type="radio" name="engine" value="cloud2"> <b>雲端 IndexTTS-2</b>（備用）<br><small>2.5 忙碌時改用；國語、英文。</small></label>
-      <details class="tips" id="advEngine"><summary>進階：自架伺服器</summary>
-      <label class="radio"><input type="radio" name="engine" value="local"> <b>自架伺服器</b>（indextts2-taiwan-tts）<br><small>已經在自己電腦裝好 IndexTTS2 的人才需要；沒有額度限制，可用台語引擎。之後的 Windows 版會內建自動啟動，不用另外開。</small></label>
-      <div id="sCloud" class="sub">
-        <label>Hugging Face 權杖（選填）<input id="sToken" type="password" autocomplete="off" placeholder="hf_…"></label>
-        <p class="hint">免費雲端 GPU 每天有額度。到 <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener">huggingface.co/settings/tokens</a> 建立免費的「Read」權杖貼上，可用你自己帳號的額度。權杖只存在這台裝置。</p>
+      <label class="radio"><input type="radio" name="engine" value="cloud25"><span><b>雲端 IndexTTS-2.5</b>（推薦）<br><small>官方 Hugging Face 示範空間；支援國語、英、日、西、阿拉伯文，可調語速。</small></span></label>
+      <label class="radio"><input type="radio" name="engine" value="cloud2"><span><b>雲端 IndexTTS-2</b>（備用）<br><small>2.5 忙碌時改用；國語、英文。</small></span></label>
+      <div id="sCloud" class="tokenbox">
+        <h3>🔑 Hugging Face 權杖</h3>
+        <p class="hint">沒登入每天只能產生幾次。貼上免費權杖後，就用你自己帳號的每日額度（只要設定一次，只存在這台裝置）。</p>
+        <div class="row"><input id="sToken" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="貼上 hf_ 開頭的權杖">
+          <button id="sTokenEye" class="ghost small" title="顯示／隱藏">👁</button></div>
+        <div class="row wrap" style="margin-top:8px"><button id="sTokenPaste" class="primary small">📋 從剪貼簿貼上</button>
+          <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener"><button class="small">➕ 去建立權杖</button></a>
+          <button id="sTokenClear" class="ghost small">清除</button></div>
+        <p id="sTokenMsg" class="hint"></p>
+        <details class="tips"><summary>怎麼申請權杖？（免費，約 2 分鐘）</summary>
+          <ol class="hint">
+            <li>到 <a href="https://huggingface.co/join" target="_blank" rel="noopener">huggingface.co/join</a> 註冊，並到信箱點驗證信（一定要驗證）。</li>
+            <li>按上面「➕ 去建立權杖」→「Create new token」。</li>
+            <li>Token type 選 <b>Read</b>，名稱隨便取（例如 xiaoke）→「Create token」。</li>
+            <li>複製出現的 <code>hf_</code> 開頭文字（只會顯示一次），回來按「📋 從剪貼簿貼上」。</li>
+          </ol>
+        </details>
       </div>
+      <details class="tips" id="advEngine"><summary>進階：自架伺服器</summary>
+      <label class="radio"><input type="radio" name="engine" value="local"><span><b>自架伺服器</b>（indextts2-taiwan-tts）<br><small>已經在自己電腦裝好 IndexTTS2 的人才需要；沒有額度限制，可用台語引擎。</small></span></label>
       <div id="sLocal" class="sub">
         <label>伺服器網址<input id="sUrl" placeholder="http://127.0.0.1:7861"></label>
         <label>密碼（伺服器有設 TTS_PASSWORD 才需要）<input id="sKey" type="password" autocomplete="off"></label>
         <p class="hint">伺服器需允許跨網域（CORS）存取，詳見 <a href="https://github.com/achir1015/indextts2-taiwan-tts" target="_blank" rel="noopener">indextts2-taiwan-tts</a>。</p>
       </div>
       </details>
-      <div class="row"><button id="sTest" class="primary">測試連線</button><span id="sTestMsg" class="hint"></span></div>
+      <div class="row" style="margin-top:12px"><button id="sTest" class="primary">測試連線</button><span id="sTestMsg" class="hint"></span></div>
     </div>
     <div class="card">
       <h2>加到桌面／主畫面</h2>

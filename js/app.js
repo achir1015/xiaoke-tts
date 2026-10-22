@@ -17,7 +17,22 @@ const fmtT = s => { s = Math.max(0, Math.round(s)); return s >= 60 ? `${Math.flo
 const safeName = s => (s || "語音").replace(/[\\/:*?"<>|\r\n]/g, "_").slice(0, 40);
 let toastTimer;
 function toast(msg, ms = 2600) { const t = $("#toast"); t.textContent = msg; t.classList.remove("hide"); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.add("hide"), ms); }
-function showErr(el, msg) { el.textContent = msg || ""; el.classList.toggle("hide", !msg); }
+function showErr(el, msg) {
+  el.textContent = msg || ""; el.classList.toggle("hide", !msg);
+  if (msg && /權杖/.test(msg)) {
+    const b = document.createElement("button");
+    b.className = "primary errbtn"; b.textContent = "🔑 去設定權杖";
+    b.onclick = () => goToken();
+    el.appendChild(b);
+  }
+}
+/** 跳到設定的權杖欄位 */
+function goToken() {
+  showTab("settings");
+  const box = $("#sCloud");
+  box.scrollIntoView({ behavior: "smooth", block: "center" });
+  box.classList.remove("need"); void box.offsetWidth; box.classList.add("need");
+}
 
 const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 const isTouch = matchMedia("(pointer: coarse)").matches;
@@ -694,7 +709,7 @@ function renderSettings() {
   $("#sCloud").classList.toggle("hide", S.engine === "local");
   $("#sLocal").classList.toggle("hide", S.engine !== "local");
   if (S.engine === "local") $("#advEngine").open = true;
-  $("#sToken").value = S.hfToken || ""; $("#sUrl").value = S.localUrl; $("#sKey").value = S.localKey || "";
+  $("#sToken").value = S.hfToken || ""; verifyToken(); $("#sUrl").value = S.localUrl; $("#sKey").value = S.localKey || "";
   $("#sVer").textContent = APP_VERSION;
 }
 async function engineChanged() {
@@ -702,7 +717,39 @@ async function engineChanged() {
   renderSettings(); renderLang(); ttsCount(); dramaParse(); checkEngine(false);
 }
 $$("input[name=engine]").forEach(r => r.onchange = async () => { await save({ engine: r.value }); engineChanged(); });
-$("#sToken").onchange = async e => { await save({ hfToken: e.target.value.trim() }); engineChanged(); };
+async function setToken(v) {
+  v = (v || "").trim().replace(/^Bearer\s+/i, "");
+  $("#sToken").value = v;
+  await save({ hfToken: v });
+  engine = makeEngine(engineOpts()); renderLang();
+  verifyToken();
+}
+/** 向 Hugging Face 確認權杖有效，顯示帳號名稱 */
+async function verifyToken() {
+  const msg = $("#sTokenMsg"), t = S.hfToken || "";
+  if (!t) { msg.textContent = "尚未設定權杖（沒登入只能產生幾次）。"; return; }
+  if (!/^hf_[A-Za-z0-9]{20,}$/.test(t)) { msg.textContent = "⚠️ 這看起來不是權杖，應該是 hf_ 開頭的一串英數字。"; return; }
+  msg.textContent = "確認中…";
+  try {
+    const r = await fetch("https://huggingface.co/api/whoami-v2", { headers: { Authorization: "Bearer " + t } });
+    if (r.status === 401) { msg.textContent = "❌ 權杖無效或已刪除，請重新建立一個。"; return; }
+    const j = await r.json();
+    msg.textContent = `✅ 權杖可以用（帳號：${j.name || "?"}）。之後產生語音會用你帳號的每日額度。${j.emailVerified === false ? "\n⚠️ 你的 Email 還沒驗證，請先到信箱點驗證信。" : ""}`;
+  } catch { msg.textContent = "已儲存（暫時無法向 Hugging Face 確認，網路可能不穩）。"; }
+}
+$("#sToken").onchange = e => setToken(e.target.value);
+$("#sTokenEye").onclick = () => { const i = $("#sToken"); i.type = i.type === "password" ? "text" : "password"; };
+$("#sTokenClear").onclick = () => { if (confirm("清除權杖？")) setToken(""); };
+$("#sTokenPaste").onclick = async () => {
+  try {
+    const t = await navigator.clipboard.readText();
+    if (!t.trim()) return toast("剪貼簿是空的，請先到 Hugging Face 複製權杖");
+    await setToken(t);
+  } catch {
+    $("#sToken").type = "text"; $("#sToken").focus();
+    toast("這個瀏覽器不讓網頁讀剪貼簿，請長按輸入框選「貼上」", 4000);
+  }
+};
 $("#sUrl").onchange = async e => { await save({ localUrl: e.target.value.trim() || "http://127.0.0.1:7861" }); engineChanged(); };
 $("#sKey").onchange = async e => { await save({ localKey: e.target.value }); engineChanged(); };
 $("#sTest").onclick = () => { $("#sTestMsg").textContent = "測試中…"; checkEngine(true); };
