@@ -1,0 +1,5 @@
+--noconfirm
+--clean
+--windowed
+--name
+XiaokeTTS

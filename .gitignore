@@ -2,3 +2,15 @@ node_modules/
 *.log
 .DS_Store
 Thumbs.db
+desktop/web/
+desktop/app.iconset/
+desktop/app.icns
+build/
+dist/
+dist-installer/
+__pycache__/
+android/build/
+android/*.jks
+android/local.properties
+ios/web/
+ios/*.xcodeproj/

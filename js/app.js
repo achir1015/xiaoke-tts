@@ -9,6 +9,7 @@ import { ScriptParser, NovelConverter, allLines, speakers, mixScript, TEMPLATES 
 import { AMBIENCES, AMB_ALIASES, SFX, makeAmbience, makeSfx } from "./sounds.js";
 import * as P from "./project.js";
 import { tagMp3, coverJpeg } from "./id3.js";
+import { Desktop, whenAppReady, appSave, openExternal, cmpVersion } from "./desktop.js";
 
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -210,21 +211,40 @@ async function finishMp3({ channels, sr, kbps, title, kind, text, voiceName, cov
   const filename = `${safeName(title)}${voiceName ? "_" + safeName(voiceName) : ""}.mp3`;
   const rec = { id: Date.now().toString(36), title, kind, text: (text || "").slice(0, 300), voice: voiceName || "", engine: engine.id, seconds, created: Date.now(), blob: mp3, filename, size: mp3.size };
   await db.put("history", rec).catch(() => toast("瀏覽器儲存空間不足，紀錄沒有存下來"));
-  let saved = false;
+  let saved = false, appPath = "";
   if (S.saveToFolder && P.folderLinked()) saved = await P.saveOutput(mp3, filename).catch(() => false);
+  // 電腦版、Android 版：自動存到「音樂／小柯語音」（iPhone 版由使用者按「分享／儲存」）
+  if (Desktop.available && !Desktop.ios) appPath = await appSave(filename, mp3).catch(e => { toast("存檔失敗：" + e.message); return ""; }) || "";
   const url = URL.createObjectURL(mp3);
   const shareFile = new File([mp3], filename, { type: "audio/mpeg" });
   const canShareFile = !!(navigator.canShare && navigator.canShare({ files: [shareFile] }));
+  const buttons = Desktop.available ? appButtons(appPath) : `${canShareFile ? `<button class="${isTouch ? "primary" : "ghost"} share">📤 ${isIOS ? "分享／儲存到檔案" : "分享"}</button>` : ""}
+    <a class="btnlink" href="${url}" download="${esc(filename)}"><button class="${canShareFile && isTouch ? "ghost" : "primary"}">⬇ 下載 MP3</button></a>`;
   resultEl.innerHTML = `<b>✅ 完成：${esc(title)}</b>（${fmtT(seconds)}，${(mp3.size / 1024 / 1024).toFixed(2)} MB）
     <audio controls src="${url}"></audio>
-    <div class="row">${canShareFile ? `<button class="${isTouch ? "primary" : "ghost"} share">📤 ${isIOS ? "分享／儲存到檔案" : "分享"}</button>` : ""}
-    <a class="btnlink" href="${url}" download="${esc(filename)}"><button class="${canShareFile && isTouch ? "ghost" : "primary"}">⬇ 下載 MP3</button></a>
+    ${appPath ? `<p class="hint">💾 已存到：${esc(appPath)}</p>` : ""}
+    <div class="row">${buttons}
     ${saved ? `<span class="hint">已存到專案資料夾「輸出」</span>` : ""}</div>`;
   resultEl.classList.remove("hide");
+  bindAppButtons(resultEl, mp3, filename, title, appPath);
   const sh = resultEl.querySelector(".share");
   if (sh) sh.onclick = () => navigator.share({ files: [shareFile], title }).catch(() => { });
   resultEl.querySelector("audio").play().catch(() => { });
   return rec;
+}
+
+/** App 版的結果按鈕：開啟資料夾、另存新檔（電腦）；分享／儲存（iPhone）；再存一次（Android） */
+function appButtons(path) {
+  if (Desktop.ios) return `<button class="primary appshare">📤 分享／儲存到檔案</button>`;
+  if (Desktop.android) return `<button class="ghost appagain">💾 再存一份到「音樂」</button>`;
+  return `${path ? `<button class="primary appopen">📂 開啟資料夾</button>` : ""}<button class="ghost appsaveas">另存新檔…</button>`;
+}
+function bindAppButtons(el, blob, filename, title, path) {
+  const on = (sel, fn) => { const b = el.querySelector(sel); if (b) b.onclick = async () => { try { await fn(); } catch (e) { toast(e.message); } }; };
+  on(".appopen", () => Desktop.api.open_folder(path));
+  on(".appsaveas", async () => { const p = await appSave(filename, blob, true); if (p) toast("已存到 " + p, 4000); });
+  on(".appshare", () => appSave(filename, blob));
+  on(".appagain", async () => { const p = await appSave(filename, blob); if (p) toast("已存到 " + p, 4000); });
 }
 
 function progressUI(box) {
@@ -693,13 +713,18 @@ async function renderHistory() {
     return `<div class="hitem" data-id="${h.id}"><div class="t">${h.kind === "drama" ? "🎭" : "🗣️"} ${esc(h.title)}</div>
       <div class="meta">${new Date(h.created).toLocaleString("zh-TW")} · ${fmtT(h.seconds)} · ${esc(h.voice || "多人")} · ${(h.size / 1024 / 1024).toFixed(2)} MB</div>
       <audio controls preload="none" src="${u}"></audio>
-      <div class="row"><a href="${u}" download="${esc(h.filename)}"><button class="small">⬇ 下載</button></a><button class="small ghost" data-del>🗑 刪除</button></div></div>`;
+      <div class="row">${Desktop.available ? `<button class="small" data-save>${Desktop.ios ? "📤 分享／儲存" : "💾 存檔"}</button>` : `<a href="${u}" download="${esc(h.filename)}"><button class="small">⬇ 下載</button></a>`}<button class="small ghost" data-del>🗑 刪除</button></div></div>`;
   }).join("") : `<p class="muted">還沒有產生過語音。</p>`;
   $$("#hList [data-del]").forEach(b => b.onclick = async () => { await db.del("history", b.closest(".hitem").dataset.id); renderHistory(); });
+  $$("#hList [data-save]").forEach(b => b.onclick = async () => {
+    const h = list.find(x => x.id === b.closest(".hitem").dataset.id);
+    try { const p = await appSave(h.filename, h.blob, Desktop.desktop); if (p && !Desktop.ios) toast("已存到 " + p, 4000); } catch (e) { toast(e.message); }
+  });
 }
 $("#hClear").onclick = async () => { if (confirm("清除全部產生紀錄？")) { await db.clear("history"); renderHistory(); } };
-$("#hSamples").innerHTML = [["星期天的菜市場", "多人同時說話＋菜市場背景"], ["深夜的客廳", "夫妻吵架、搶話"], ["小學生該不該用手機", "辯論、大廳回音"], ["破病有夠艱苦", "中年女音朗讀"]]
-  .map(([f, d]) => `<div><b>${f}</b><br><small>${d}</small><audio controls preload="none" src="samples/${encodeURIComponent(f)}.mp3"></audio></div>`).join("");
+// 範例檔用英文檔名（Android 打包工具不支援中文檔名）
+$("#hSamples").innerHTML = [["market", "星期天的菜市場", "多人同時說話＋菜市場背景"], ["night-fight", "深夜的客廳", "夫妻吵架、搶話"], ["debate", "小學生該不該用手機", "辯論、大廳回音"], ["sick", "破病有夠艱苦", "中年女音朗讀"]]
+  .map(([f, t, d]) => `<div><b>${t}</b><br><small>${d}</small><audio controls preload="none" src="samples/${f}.mp3"></audio></div>`).join("");
 
 // ------------------------------------------------------------
 // 設定
@@ -786,8 +811,52 @@ $("#sInstall").onclick = async () => { if (!installEvt) return; installEvt.promp
   if (q.get("tpl") && TEMPLATES[q.get("tpl")]) { dScript.value = ""; $(`[data-tpl=${q.get("tpl")}]`).click(); }
   showTab(q.get("tab") || prefs.get("tab", "tts"));
   checkEngine(false);
-  if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js").catch(() => { });
+  const inApp = await whenAppReady(location.hostname === "127.0.0.1" ? 2500 : 300);
+  if (!inApp && "serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => { });
+  if (inApp) setupApp();
 })();
+
+// ------------------------------------------------------------
+// App 版（Windows／Mac／Android／iPhone）：版本更新、外部連結
+// ------------------------------------------------------------
+async function setupApp() {
+  document.body.classList.add("inapp");
+  $("#sInstallBox").classList.add("hide");
+  // 外部連結（申請權杖、GitHub）用系統瀏覽器開
+  document.addEventListener("click", e => {
+    const a = e.target.closest("a[target=_blank]");
+    if (a) { e.preventDefault(); openExternal(a.href); }
+  }, true);
+  const info = await Desktop.api.app_info().catch(() => null);
+  if (info?.version) $("#sVer").textContent = `${APP_VERSION}（${Desktop.ios ? "iPhone" : Desktop.android ? "Android" : info.platform === "darwin" ? "Mac" : "Windows"} App ${info.version}）`;
+  $("#sUpdate").classList.remove("hide");
+  $("#sCheckUpdate").onclick = () => checkAppUpdate(true);
+  if (!Desktop.ios) setTimeout(() => checkAppUpdate(false), 4000);
+}
+
+async function checkAppUpdate(manual) {
+  const msg = $("#sUpdateMsg");
+  if (manual) msg.textContent = "檢查中…";
+  const r = await Desktop.api.check_update().catch(e => ({ status: "error", message: e.message }));
+  if (r.status !== "ok") { if (manual) msg.textContent = "無法檢查更新：" + (r.message || ""); return; }
+  if (!r.latest || cmpVersion(r.latest, r.current) <= 0 || !r.url) { if (manual) msg.textContent = `✅ 已是最新版（${r.current}）`; return; }
+  msg.textContent = `有新版本 ${r.latest}（目前 ${r.current}）`;
+  const bar = $("#updateBar");
+  bar.innerHTML = `🎉 小柯語音有新版本 ${esc(r.latest)}<button class="primary small">立即更新</button><button class="ghost small" data-x>稍後</button>`;
+  bar.classList.remove("hide");
+  bar.querySelector("[data-x]").onclick = () => bar.classList.add("hide");
+  bar.querySelector(".primary").onclick = async () => {
+    await Desktop.api.install_update(r.url, r.latest);
+    const poll = setInterval(async () => {
+      const st = await Desktop.api.update_status();
+      if (st.state === "downloading") bar.firstChild.textContent = `下載新版中… ${st.pct}% `;
+      else if (st.state === "permission") { clearInterval(poll); bar.firstChild.textContent = "請在設定畫面允許「安裝不明的應用程式」，再按一次立即更新 "; }
+      else if (st.state === "manual") { clearInterval(poll); bar.firstChild.textContent = "已打開新版安裝映像：把 App 拖進「應用程式」取代即可 "; }
+      else if (st.state === "error") { clearInterval(poll); bar.firstChild.textContent = "更新失敗：" + (st.message || "") + " "; }
+      else if (st.state === "launching") bar.firstChild.textContent = "安裝中，完成後會自動重新開啟… ";
+    }, 700);
+  };
+}
 
 // ------------------------------------------------------------
 // 離開／關閉：停止所有執行中的工作（產生語音、播放、錄音）

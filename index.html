@@ -34,6 +34,7 @@
   <button data-tab="settings"><i>⚙️</i><span>設定</span><em>設定</em></button>
 </nav>
 <div id="folderBar" class="folderbar hide"></div>
+<div id="updateBar" class="folderbar hide"></div>
 
 <main>
 <!-- ================= 單一語音 ================= -->
@@ -249,6 +250,7 @@
       <div class="row" style="margin-top:12px"><button id="sTest" class="primary">測試連線</button><span id="sTestMsg" class="hint"></span></div>
     </div>
     <div class="card">
+      <div id="sInstallBox">
       <h2>加到桌面／主畫面</h2>
       <p>把小柯語音像 App 一樣放在桌面或手機主畫面：</p>
       <button id="sInstall" class="primary hide">📲 安裝到這台裝置</button>
@@ -258,6 +260,12 @@
         <li><b>iPhone / iPad（Safari）</b>：分享 →「加入主畫面」。</li>
         <li><b>Android（Chrome）</b>：⋮ →「加到主畫面」。</li>
       </ul>
+      <p class="hint">也有可以安裝的 App：Windows、Mac、Android 到 <a href="https://github.com/achir1015/xiaoke-tts/releases/latest" target="_blank" rel="noopener">下載頁</a>。</p>
+      </div>
+      <div id="sUpdate" class="hide">
+        <h2>App 更新</h2>
+        <div class="row"><button id="sCheckUpdate" class="small">檢查更新</button><span id="sUpdateMsg" class="hint"></span></div>
+      </div>
       <h2>瀏覽器資料</h2>
       <p class="hint" id="sStorage"></p>
       <div class="row wrap"><button id="sClearCache" class="ghost small">清除台詞快取</button></div>

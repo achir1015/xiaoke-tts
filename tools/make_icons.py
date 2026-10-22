@@ -76,6 +76,18 @@ def main():
     make(32).save(ROOT / "favicon-32.png")
     make(16).save(ROOT / "favicon-16.png")
     make(256).save(ROOT / "favicon.ico", sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
+    # Windows／Mac 桌面版
+    (ROOT / "desktop").mkdir(exist_ok=True)
+    make(256).save(ROOT / "desktop" / "app.ico", sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
+    # Android 桌面圖示
+    for folder, px in (("mdpi", 48), ("hdpi", 72), ("xhdpi", 96), ("xxhdpi", 144), ("xxxhdpi", 192)):
+        d = ROOT / "android" / "res" / f"mipmap-{folder}"
+        d.mkdir(parents=True, exist_ok=True)
+        make(px).save(d / "ic_launcher.png")
+    # iPhone／iPad：不透明方形 1024（系統自己加圓角）
+    d = ROOT / "ios" / "XiaokeTTS" / "Assets.xcassets" / "AppIcon.appiconset"
+    d.mkdir(parents=True, exist_ok=True)
+    make(1024, rounded=False).convert("RGB").save(d / "icon-1024.png")
     print("icons ok")
 
 
