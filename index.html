@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>小柯機器人台灣語音 MP3 工具</title>
+<meta name="description" content="用 IndexTTS 產生台灣口音的 MP3：單一文字轉語音、多人劇本語音、自然環境音、背景音樂，免安裝直接在瀏覽器使用。">
+<meta name="theme-color" content="#0f766e">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="favicon-16.png" sizes="16x16" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="小柯語音">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="stylesheet" href="css/app.css">
+<script src="vendor/lame.min.js"></script>
+</head>
+<body>
+<header class="top">
+  <img src="icons/icon-192.png" alt="" class="logo">
+  <div class="brand"><h1>小柯機器人台灣語音 MP3 工具</h1><small>IndexTTS 文字轉語音 · 台灣口音 · 劇本多人配音</small></div>
+  <button id="engineChip" class="chip" title="語音引擎設定">⏳ 連線中</button>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button data-tab="tts" class="on">🗣️ 單一語音</button>
+  <button data-tab="drama">🎭 劇本語音</button>
+  <button data-tab="voices">🎙️ 聲音範本</button>
+  <button data-tab="project">📁 專案素材</button>
+  <button data-tab="history">🕘 產生紀錄</button>
+  <button data-tab="settings">⚙️ 設定</button>
+</nav>
+<div id="folderBar" class="folderbar hide"></div>
+
+<main>
+<!-- ================= 單一語音 ================= -->
+<section id="tab-tts" class="tab on">
+  <div class="grid2">
+    <div class="card">
+      <div class="row between"><h2>文字</h2>
+        <div class="row"><select id="ttsTextAsset" title="從專案文案載入"><option value="">📝 載入專案文案…</option></select>
+        <button id="ttsSaveText" class="ghost small" title="把目前文字存成專案文案">💾 存成文案</button></div></div>
+      <textarea id="ttsText" rows="9" placeholder="輸入要轉成語音的繁體中文…&#10;例如：大家好，我是小柯機器人。今天天氣真好，我們下午去夜市吃蚵仔煎吧！"></textarea>
+      <div class="hint" id="ttsCount">0 字</div>
+
+      <h3>聲音</h3>
+      <div id="ttsVoices" class="voicegrid"></div>
+
+      <div class="fields">
+        <label>語言<select id="ttsLang"></select></label>
+        <label>MP3 音質<select id="ttsBitrate"><option value="128">128 kbps（小檔）</option><option value="192">192 kbps（標準）</option><option value="320">320 kbps（最高）</option></select></label>
+      </div>
+
+      <h3>情緒</h3>
+      <div id="ttsEmo" class="seg wrap"></div>
+      <div class="fields">
+        <label>情緒強度 <b id="ttsStrengthV"></b><input type="range" id="ttsStrength" min="0.1" max="1" step="0.05"></label>
+        <label>語速 <b id="ttsSpeedV"></b><input type="range" id="ttsSpeed" min="0.5" max="2" step="0.05"></label>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>背景與封面 <small class="muted">（選用）</small></h2>
+      <div class="fields">
+        <label>背景音樂<select id="ttsMusic"></select></label>
+        <label>音量 <b id="ttsMusicVolV"></b><input type="range" id="ttsMusicVol" min="0.05" max="1" step="0.05"></label>
+        <label>環境音<select id="ttsAmb"></select></label>
+        <label>音量 <b id="ttsAmbVolV"></b><input type="range" id="ttsAmbVol" min="0.05" max="1" step="0.05"></label>
+        <label>MP3 封面<select id="ttsCover"></select></label>
+        <label>演出者<input id="ttsArtist" maxlength="40"></label>
+      </div>
+      <div class="row"><button id="ttsPreviewBg" class="ghost small">▶ 試聽背景 8 秒</button></div>
+
+      <div class="actions">
+        <button id="ttsGo" class="primary big">🎧 產生 MP3</button>
+        <button id="ttsStop" class="ghost hide">取消</button>
+      </div>
+      <div id="ttsProg" class="prog hide"><div class="bar"><i></i></div><p></p></div>
+      <div id="ttsErr" class="err hide"></div>
+      <div id="ttsResult" class="result hide"></div>
+      <details class="tips"><summary>💡 小提示</summary>
+        <ul>
+          <li>雲端引擎每段約 3~10 秒，長文會自動切成多段再接起來。</li>
+          <li>少數字會唸成大陸讀音（例如「垃圾」），可以改寫成同音字。</li>
+          <li>想要自己的聲音？到「聲音範本」錄 10 秒，就能用你的聲音說話。</li>
+          <li>背景音樂、封面圖放在「專案素材」，也可以連結電腦上的專案資料夾。</li>
+        </ul>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 劇本語音 ================= -->
+<section id="tab-drama" class="tab">
+  <div class="card">
+    <div class="row wrap tplrow"><b>範本：</b>
+      <button data-tpl="single">☀️ 單人廣播</button><button data-tpl="qa">💬 一問一答</button>
+      <button data-tpl="market">🥬 菜市場</button><button data-tpl="storm">⛈️ 颱風夜</button>
+      <button data-tpl="nature">🌲 山中夏夜</button><button data-tpl="debate">🎤 辯論</button><button data-tpl="fight">💢 吵架</button>
+    </div>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <div class="row between"><label class="grow">作品名稱<input id="dTitle" maxlength="60" placeholder="例如：星期天的菜市場"></label></div>
+      <div class="row wrap inserts">
+        <select id="dInsAmb"><option value="">🌦️ 插入背景音…</option></select>
+        <select id="dInsSfx"><option value="">💥 插入音效…</option></select>
+        <select id="dInsMusic"><option value="">🎵 插入背景音樂…</option></select>
+        <button data-ins="together" class="ghost small">👥 同時說</button>
+        <button data-ins="barge" class="ghost small">⚡ 搶話</button>
+        <button data-ins="pause" class="ghost small">⏸ 停頓</button>
+        <select id="dTextAsset"><option value="">📝 載入專案文案…</option></select>
+      </div>
+      <textarea id="dScript" rows="18" spellcheck="false" placeholder="角色：台詞&#10;每行一句。點上方範本看看寫法。"></textarea>
+      <div id="dWarn" class="warn hide"></div>
+      <details class="tips"><summary>📖 劇本寫法</summary>
+<pre># 井號開頭是註解
+[角色] 阿明=年輕男音 左, 阿嬤=高齡女音 右, 老闆=中年男音 80%
+[背景 雨聲 40%]          ← 持續的環境音，換場再寫一次；[背景 無] 關掉
+[背景 森林+溪流 30%]     ← 用 + 疊兩種
+[音樂 我的配樂 20%]      ← 專案「背景音樂」裡的檔案；[音樂 無] 關掉
+[音效 雷聲 90%]          ← 單次音效；加「等」會等音效播完才說下一句
+[停頓 1.5]
+
+阿明：一般台詞（一人說）
+阿嬤（生氣）：加上情緒
+阿嬤（生氣80%）：情緒加上強度
+>阿明：開頭加 > ＝ 搶話，上一句還沒講完就插進來
+
+【同時】
+攤販甲：來喔來喔！
+攤販乙：俗俗賣喔！
+【/同時】
+
+旁白：沒寫角色的行，也會當成旁白</pre>
+        <p>情緒：開心、生氣、悲傷、害怕、厭惡、低落、驚訝、平靜（也看得懂大吼、笑、哭、無奈、溫柔…）</p>
+        <p id="dSoundList"></p>
+      </details>
+      <details class="tips" id="novelBox"><summary>📖 小說轉劇本</summary>
+        <textarea id="novelText" rows="6" placeholder="貼上小說內文，對話用「」包起來"></textarea>
+        <div class="row wrap"><label class="grow">角色名（可留白自動偵測）<input id="novelNames" placeholder="例如：阿嬤、小美、老闆"></label>
+          <label class="check"><input type="checkbox" id="novelNarr" checked> 敘述轉成旁白</label>
+          <button id="novelGo" class="ghost">轉換 ↓</button></div>
+      </details>
+    </div>
+
+    <div class="card">
+      <h2>演員與混音</h2>
+      <div id="dEmpty" class="muted">寫好劇本後，這裡會列出每個角色。</div>
+      <div class="tablewrap"><table id="castTable" class="hide"><thead><tr><th>角色</th><th>聲音</th><th>語言</th><th>左 ↔ 右</th><th>音量</th></tr></thead><tbody></tbody></table></div>
+      <div class="fields">
+        <label>對話節奏<span id="paceSeg" class="seg"><button data-v="從容">從容</button><button data-v="一般">一般</button><button data-v="緊湊">緊湊</button><button data-v="爭吵">爭吵</button></span></label>
+        <label>空間感<span id="roomSeg" class="seg"><button data-v="無">無</button><button data-v="房間">房間</button><button data-v="大廳">大廳</button><button data-v="戶外">戶外</button></span></label>
+        <label>環境音總音量 <b id="dAmbVolV"></b><input type="range" id="dAmbVol" min="0" max="2" step="0.05"></label>
+        <label>背景音樂總音量 <b id="dMusicVolV"></b><input type="range" id="dMusicVol" min="0" max="2" step="0.05"></label>
+        <label>MP3 封面<select id="dCover"></select></label>
+        <label>MP3 音質<select id="dBitrate"><option value="128">128 kbps</option><option value="192">192 kbps</option><option value="320">320 kbps</option></select></label>
+      </div>
+      <div class="hint" id="dStat"></div>
+      <div class="actions">
+        <button id="dGo" class="primary big">🎬 開始製作 MP3</button>
+        <button id="dStop" class="ghost hide">取消</button>
+      </div>
+      <div id="dProg" class="prog hide"><div class="bar"><i></i></div><p></p></div>
+      <div id="dErr" class="err hide"></div>
+      <div id="dResult" class="result hide"></div>
+      <p class="hint">做過的句子會記在瀏覽器裡：修改劇本後重新製作，只會重做有改動的句子。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 聲音範本 ================= -->
+<section id="tab-voices" class="tab">
+  <div class="card">
+    <div class="row between wrap"><h2>聲音範本</h2><button id="vAdd" class="primary">＋ 新增自訂聲音</button></div>
+    <p class="muted">IndexTTS 是「零樣本聲音複製」：聽 5~15 秒的樣本，就用那個人的音色和口音說話。樣本是台灣人，說出來就是台灣腔。
+      每種聲音都可以 🎤 錄音或 📁 上傳替換（只存在這台裝置）。專案資料夾「聲音」裡的 mp3 也會出現在這裡。</p>
+    <div id="vList" class="vcards"></div>
+    <details class="tips"><summary>🎤 好樣本的條件與建議朗讀稿</summary>
+      <p>5~15 秒、只有一個人說話、沒有背景音樂、說話自然。</p>
+      <blockquote>今天天氣真好，我們下午去夜市吃蚵仔煎，再買一杯珍珠奶茶。你要不要一起來？記得帶雨傘喔。</blockquote>
+      <p class="warnline">⚠️ 請只使用自己或已取得同意的聲音，勿用本工具冒充特定真人。</p>
+    </details>
+  </div>
+</section>
+
+<!-- ================= 專案素材 ================= -->
+<section id="tab-project" class="tab">
+  <div class="card">
+    <div class="row between wrap"><h2>專案</h2>
+      <label class="grow">專案名稱<input id="pName" maxlength="40"></label></div>
+    <div id="pFolder" class="folderbox"></div>
+  </div>
+  <div id="pKinds" class="kinds"></div>
+  <div class="card">
+    <h2>內建聲音庫 <small class="muted">（即時合成，不用下載）</small></h2>
+    <h3>🌦️ 環境音（劇本用 [背景 名稱]）</h3><div id="pAmb" class="soundgrid"></div>
+    <h3>💥 音效（劇本用 [音效 名稱]）</h3><div id="pSfx" class="soundgrid"></div>
+  </div>
+</section>
+
+<!-- ================= 產生紀錄 ================= -->
+<section id="tab-history" class="tab">
+  <div class="card">
+    <div class="row between"><h2>產生紀錄</h2><button id="hClear" class="ghost small">清除全部</button></div>
+    <div id="hList"></div>
+    <h3>範例作品試聽</h3>
+    <div id="hSamples" class="samples"></div>
+  </div>
+</section>
+
+<!-- ================= 設定 ================= -->
+<section id="tab-settings" class="tab">
+  <div class="grid2">
+    <div class="card">
+      <h2>語音引擎</h2>
+      <p class="hint">打開工具就會自動連線，不用安裝或執行任何程式；主引擎連不到時會自動改用備用引擎。關掉網頁就會停止。</p>
+      <label class="radio"><input type="radio" name="engine" value="cloud25"> <b>雲端 IndexTTS-2.5</b>（推薦）<br><small>官方 Hugging Face 示範空間；支援國語、英、日、西、阿拉伯文，可調語速。免費額度有限制。</small></label>
+      <label class="radio"><input type="radio" name="engine" value="cloud2"> <b>雲端 IndexTTS-2</b>（備用）<br><small>2.5 忙碌時改用；國語、英文。</small></label>
+      <details class="tips" id="advEngine"><summary>進階：自架伺服器</summary>
+      <label class="radio"><input type="radio" name="engine" value="local"> <b>自架伺服器</b>（indextts2-taiwan-tts）<br><small>已經在自己電腦裝好 IndexTTS2 的人才需要；沒有額度限制，可用台語引擎。之後的 Windows 版會內建自動啟動，不用另外開。</small></label>
+      <div id="sCloud" class="sub">
+        <label>Hugging Face 權杖（選填）<input id="sToken" type="password" autocomplete="off" placeholder="hf_…"></label>
+        <p class="hint">免費雲端 GPU 每天有額度。到 <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener">huggingface.co/settings/tokens</a> 建立免費的「Read」權杖貼上，可用你自己帳號的額度。權杖只存在這台裝置。</p>
+      </div>
+      <div id="sLocal" class="sub">
+        <label>伺服器網址<input id="sUrl" placeholder="http://127.0.0.1:7861"></label>
+        <label>密碼（伺服器有設 TTS_PASSWORD 才需要）<input id="sKey" type="password" autocomplete="off"></label>
+        <p class="hint">伺服器需允許跨網域（CORS）存取，詳見 <a href="https://github.com/achir1015/indextts2-taiwan-tts" target="_blank" rel="noopener">indextts2-taiwan-tts</a>。</p>
+      </div>
+      </details>
+      <div class="row"><button id="sTest" class="primary">測試連線</button><span id="sTestMsg" class="hint"></span></div>
+    </div>
+    <div class="card">
+      <h2>加到桌面／主畫面</h2>
+      <p>把小柯語音像 App 一樣放在桌面或手機主畫面：</p>
+      <button id="sInstall" class="primary hide">📲 安裝到這台裝置</button>
+      <ul class="hint">
+        <li><b>Windows / Mac（Chrome、Edge）</b>：網址列右邊的「安裝」圖示，或按上面的按鈕。</li>
+        <li><b>iPhone / iPad（Safari）</b>：分享 →「加入主畫面」。</li>
+        <li><b>Android（Chrome）</b>：⋮ →「加到主畫面」。</li>
+      </ul>
+      <h2>瀏覽器資料</h2>
+      <p class="hint" id="sStorage"></p>
+      <div class="row wrap"><button id="sClearCache" class="ghost small">清除台詞快取</button></div>
+      <h2>關於</h2>
+      <p class="hint">版本 <b id="sVer"></b>。語音模型：<a href="https://github.com/index-tts/index-tts" target="_blank" rel="noopener">IndexTTS</a>（bilibili，請遵守其模型授權）。
+        聲音樣本來自 <a href="https://github.com/achir1015/indextts2-taiwan-tts" target="_blank" rel="noopener">indextts2-taiwan-tts</a>（Common Voice 台灣華語 CC0、TaigiSpeech CC BY 4.0）。
+        文字與聲音樣本會送到所選的語音引擎產生語音；其他資料都只存在這台裝置。</p>
+      <p class="warnline">⚠️ 請勿用本工具冒充特定真人的聲音。</p>
+    </div>
+  </div>
+</section>
+</main>
+
+<div id="toast" class="toast hide"></div>
+<div id="recDlg" class="dlg hide"><div class="dlgbox">
+  <h3 id="recTitle">錄音</h3>
+  <p class="hint">請朗讀：今天天氣真好，我們下午去夜市吃蚵仔煎，再買一杯珍珠奶茶。你要不要一起來？記得帶雨傘喔。</p>
+  <div class="recmeter"><i id="recLevel"></i></div>
+  <p id="recTime" class="big center">0.0 秒</p>
+  <div class="row center"><button id="recStart" class="primary">● 開始錄音</button><button id="recStopBtn" class="ghost hide">■ 停止並使用</button><button id="recCancel" class="ghost">取消</button></div>
+</div></div>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

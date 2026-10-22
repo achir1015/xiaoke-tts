@@ -1,0 +1,21 @@
+{
+  "name": "小柯機器人台灣語音 MP3 工具",
+  "short_name": "小柯語音",
+  "description": "用 IndexTTS 產生台灣口音 MP3：單一文字轉語音、多人劇本語音、自然環境音與背景音樂。",
+  "lang": "zh-Hant-TW",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f4f6f5",
+  "theme_color": "#0f766e",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "單一語音", "url": "./?tab=tts", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "劇本語音", "url": "./?tab=drama", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

@@ -1,0 +1,9 @@
+*.bat text eol=crlf
+*.js text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.md text eol=lf
+*.py text eol=lf
+*.mp3 binary
+*.png binary
+*.ico binary
