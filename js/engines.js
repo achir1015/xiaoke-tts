@@ -3,8 +3,8 @@
 //   LocalEngine  自己架的 indextts2-taiwan-tts 伺服器（Windows 電腦、可接台語引擎）
 // 兩者都回傳 { data: Float32Array 單聲道, sr }。
 
-import { decodeMono } from "./audio.js";
-import { sampleBlob } from "./voices.js";
+import { decodeMono, trimSilence, resample, encodeMp3 } from "./audio.js";
+import { sampleBlob, publicUrl } from "./voices.js";
 
 export const EMOTIONS = ["開心", "生氣", "悲傷", "害怕", "厭惡", "低落", "驚訝", "平靜"];
 
@@ -46,6 +46,17 @@ function friendly(msg) {
   return m || "語音引擎發生錯誤（沒有提供原因），請再試一次。";
 }
 
+/** 自訂聲音（手機錄音可能好幾 MB）→ 去頭尾靜音、最多 10 秒、22 kHz 單聲道 48 kbps mp3（約 60 KB） */
+async function compactSample(blob) {
+  try {
+    const { data, sr } = await decodeMono(blob);
+    let y = trimSilence(data, sr, -45);
+    y = y.slice(0, Math.round(10 * sr));
+    y = await resample(y, sr, 22050);
+    return await encodeMp3([y], 22050, 48);
+  } catch { return blob; }
+}
+
 export class CloudEngine {
   constructor(version = "2.5", token = "") {
     this.v = CLOUD_SPACES[version] ? version : "2.5";
@@ -54,7 +65,8 @@ export class CloudEngine {
     this.uploaded = new Map();          // 聲音 id+版本 → 雲端暫存路徑（同一次使用不用重傳）
   }
   get id() { return "cloud" + this.v; }
-  headers(extra = {}) { return this.token ? { ...extra, Authorization: "Bearer " + this.token } : extra; }
+  // 權杖要放在 x-hf-authorization（Hugging Face 官方用戶端的做法）；放 Authorization 會被 ZeroGPU 擋掉
+  headers(extra = {}) { return this.token ? { ...extra, "x-hf-authorization": "Bearer " + this.token } : extra; }
 
   async status() {
     const r = await fetch(this.space.base + "/gradio_api/info", { headers: this.headers() });
@@ -62,39 +74,49 @@ export class CloudEngine {
     return { ok: true, message: this.space.name + " 已連線" };
   }
 
+  /** 回傳給 Gradio 的聲音檔：內建聲音給網址（雲端自己下載），自訂聲音壓縮成小 mp3 再上傳 */
   async upload(voiceId, version) {
     const key = voiceId + "@" + version;
     if (this.uploaded.has(key)) return this.uploaded.get(key);
-    const blob = await sampleBlob(voiceId);
+    const url = await publicUrl(voiceId);
+    if (url) {
+      const file = { path: url, url, orig_name: voiceId + ".mp3", meta: { _type: "gradio.FileData" } };
+      this.uploaded.set(key, file);
+      return file;
+    }
+    const small = await compactSample(await sampleBlob(voiceId));
     const fd = new FormData();
-    fd.append("files", blob, "voice." + (/wav/.test(blob.type) ? "wav" : /webm/.test(blob.type) ? "webm" : /ogg/.test(blob.type) ? "ogg" : /mp4|m4a|aac/.test(blob.type) ? "m4a" : "mp3"));
-    const r = await fetch(this.space.base + "/gradio_api/upload", { method: "POST", body: fd, headers: this.headers() });
+    fd.append("files", small, "voice.mp3");
+    const ac = new AbortController(), timer = setTimeout(() => ac.abort(), 60000);
+    let r;
+    try { r = await fetch(this.space.base + "/gradio_api/upload", { method: "POST", body: fd, headers: this.headers(), signal: ac.signal }); }
+    catch { throw new Error("上傳聲音樣本逾時，網路可能不穩，請換個網路（例如行動網路）再試。"); }
+    finally { clearTimeout(timer); }
     if (!r.ok) throw new Error(friendly(`上傳聲音樣本失敗（${r.status}）`));
-    const path = (await r.json())[0];
-    this.uploaded.set(key, path);
-    return path;
+    const file = { path: (await r.json())[0], meta: { _type: "gradio.FileData" } };
+    this.uploaded.set(key, file);
+    return file;
   }
 
   /** o = {text, voiceId, voiceVersion, lang, emotion, strength, speed, signal} */
   async synth(o) {
     const lang = this.space.langs[o.lang];
     if (!lang) throw new Error(`${this.space.name} 不支援「${LANG_NAMES[o.lang] || o.lang}」${o.lang === "nan" ? "，台語請到「設定」改用自架伺服器" : ""}`);
-    let path = await this.upload(o.voiceId, o.voiceVersion);
-    try { return await this._call(o, path, lang); }
+    let file = await this.upload(o.voiceId, o.voiceVersion);
+    try { return await this._call(o, file, lang); }
     catch (e) {
       if (!/找不到|not found|No such file/i.test(e.message)) throw e;
       this.uploaded.delete(o.voiceId + "@" + o.voiceVersion);       // 雲端暫存被清掉 → 重傳一次
-      path = await this.upload(o.voiceId, o.voiceVersion);
-      return this._call(o, path, lang);
+      file = await this.upload(o.voiceId, o.voiceVersion);
+      return this._call(o, file, lang);
     }
   }
 
-  async _call(o, path, lang) {
+  async _call(o, file, lang) {
     const vec = [0, 0, 0, 0, 0, 0, 0, 0];
     const useVec = o.emotion && o.emotion !== "自然";
     if (useVec) vec[EMOTIONS.indexOf(o.emotion)] = Math.max(0.05, Math.min(1, o.strength ?? 0.7));
     const method = useVec ? "Use emotion vectors" : "Same as the voice reference";
-    const file = { path, meta: { _type: "gradio.FileData" } };
     const sampling = [true, 0.8, 30, 0.8, 0, 3, 10, 1500];
     // 語速 → 時長倍率（越快 = 時長越短）
     const dur = Math.max(0.5, Math.min(2, 1 / (o.speed || 1)));

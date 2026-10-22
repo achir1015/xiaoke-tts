@@ -240,8 +240,8 @@ const tts = { voice: S.voice, emotion: S.emotion, abort: null };
 function renderVoiceChips() {
   const ready = voices.filter(v => v.ready);
   if (!ready.some(v => v.id === tts.voice)) tts.voice = ready[0]?.id;
-  $("#ttsVoices").innerHTML = ready.map(v => `<div class="vchip ${v.id === tts.voice ? "on" : ""}" data-id="${esc(v.id)}" title="${esc(v.name)}">
-    <span>${v.asset ? "📁 " : v.custom ? "⭐ " : ""}${esc(v.name)}</span><button class="play" title="試聽樣本">▶</button></div>`).join("");
+  $("#ttsVoices").innerHTML = ready.map(v => `<div class="vchip ${v.id === tts.voice ? "on" : ""}" data-id="${esc(v.id)}" title="${esc(v.name)}${v.ageLabel ? `（${v.ageLabel}・${v.genderLabel}）` : ""}">
+    <span>${v.asset ? "📁 " : v.custom ? "⭐ " : ""}${esc(v.name)}${v.ageLabel ? `<small class="vtag">${v.ageLabel}・${v.genderLabel}</small>` : ""}</span><button class="play" title="試聽樣本">▶</button></div>`).join("");
   $$("#ttsVoices .vchip").forEach(el => {
     el.onclick = () => { tts.voice = el.dataset.id; save({ voice: tts.voice }); renderVoiceChips(); };
     el.querySelector(".play").onclick = async e => { e.stopPropagation(); try { await playBlob(await sampleBlob(el.dataset.id)); } catch (er) { toast(er.message); } };
@@ -436,7 +436,7 @@ function dramaParse() {
   $("#castTable tbody").innerHTML = names.map(n => {
     const c = s.cast[n];
     return `<tr data-n="${esc(n)}"><td><b>${esc(n)}</b></td>
-      <td><select data-k="voice_id">${ready.map(v => `<option value="${esc(v.id)}" ${v.id === c.voice_id ? "selected" : ""}>${esc(v.name)}</option>`).join("")}</select></td>
+      <td><select data-k="voice_id">${ready.map(v => `<option value="${esc(v.id)}" ${v.id === c.voice_id ? "selected" : ""}>${esc(v.name)}${v.ageLabel ? `（${v.ageLabel}${v.genderLabel}）` : ""}</option>`).join("")}</select></td>
       <td><select data-k="language">${langs.map(l => `<option value="${l}" ${l === c.language ? "selected" : ""}>${LANG_NAMES[l].replace("（實驗性）", "")}</option>`).join("")}${langs.includes(c.language) ? "" : `<option value="${c.language}" selected>${LANG_NAMES[c.language]}（目前引擎不支援）</option>`}</select></td>
       <td data-l="左 ↔ 右"><input type="range" data-k="pan" min="-1" max="1" step="0.1" value="${c.pan}"></td>
       <td data-l="音量"><input type="range" data-k="volume" min="0.3" max="1.6" step="0.1" value="${c.volume}"></td></tr>`;
@@ -507,7 +507,7 @@ $("#dSoundList").innerHTML = `<b>內建環境音：</b>${Object.keys(AMBIENCES).
 // ------------------------------------------------------------
 function renderVoiceCards() {
   $("#vList").innerHTML = voices.map(v => `<div class="vcard" data-id="${esc(v.id)}">
-    <div class="name">${esc(v.name)}${v.builtin ? `<span class="tag ${v.replaced ? "g" : ""}">${v.replaced ? "已換成我的樣本" : "內建"}</span>` : v.asset ? `<span class="tag g">專案</span>` : `<span class="tag g">自訂</span>`}</div>
+    <div class="name">${esc(v.name)}${v.builtin ? `<span class="tag ${v.replaced ? "g" : ""}">${v.replaced ? "已換成我的樣本" : "內建"}</span>` : ""}${v.ageLabel ? `<span class="tag">${v.ageLabel}・${v.genderLabel}</span>` : ""}${v.builtin ? "" : v.asset ? `<span class="tag g">專案</span>` : `<span class="tag g">自訂</span>`}</div>
     ${v.ready ? "" : `<div class="hint">還沒有樣本，請錄音或上傳</div>`}
     <div class="row">${v.ready ? `<button class="small" data-a="play">▶ 試聽</button>` : ""}
       ${v.asset ? "" : `<button class="small" data-a="rec">🎤 錄音</button><button class="small" data-a="up">📁 上傳</button>`}

@@ -3,26 +3,15 @@
 
 import { db } from "./store.js";
 import { assetBlob } from "./project.js";
+import { BUILTIN } from "./voices-builtin.js";
 
-export const BUILTIN = [
-  { id: "young_female", name: "年輕女音", gender: "female" },
-  { id: "young_male", name: "年輕男音", gender: "male" },
-  { id: "middle_female", name: "中年女音", gender: "female" },
-  { id: "middle_male", name: "中年男音", gender: "male" },
-  { id: "elder_female", name: "高齡女音", gender: "female" },
-  { id: "elder_male", name: "高齡男音", gender: "male" },
-  { id: "girl", name: "女童音", gender: "female" },
-  { id: "boy", name: "男童音", gender: "male" },
-  { id: "mature_female", name: "成熟女音", gender: "female" },
-  { id: "girl2", name: "女童音 2", gender: "female" },
-  { id: "boy2", name: "男童音 2", gender: "male" },
-];
+export { BUILTIN };
 
 // 劇本裡可以用的聲音別名
 export const VOICE_ALIASES = {
   "年輕女音": "young_female", "年輕男音": "young_male", "女童音": "girl", "男童音": "boy",
   "中年女音": "middle_female", "中年男音": "middle_male", "高齡女音": "elder_female", "高齡男音": "elder_male",
-  "成熟女音": "mature_female", "女童": "girl", "男童": "boy", "小女孩": "girl", "小男孩": "boy",
+  "成熟女音": "mature_female", "成熟女人": "mature_female", "女童音2": "girl2", "女童音 2": "girl2", "男童音2": "boy2", "男童音 2": "boy2", "女童": "girl", "男童": "boy", "小女孩": "girl", "小男孩": "boy",
   "阿嬤": "elder_female", "阿公": "elder_male",
 };
 
@@ -43,6 +32,14 @@ export async function listVoices(force) {
 
 export async function voiceById(id) {
   return (await listVoices()).find(v => v.id === id);
+}
+
+/** 內建聲音（沒被替換）的公開網址：雲端引擎直接從網址下載，手機不用上傳 */
+export const PUBLIC_BASE = "https://achir1015.github.io/xiaoke-tts/";
+export async function publicUrl(id) {
+  if (!BUILTIN.some(b => b.id === id)) return null;
+  if (await db.get("voices", id)) return null;              // 使用者換過樣本 → 要上傳
+  return PUBLIC_BASE + `voices/${id}.mp3`;
 }
 
 /** 取得聲音樣本音檔（Blob） */
