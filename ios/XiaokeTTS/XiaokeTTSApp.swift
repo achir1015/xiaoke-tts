@@ -61,10 +61,10 @@ final class Web: NSObject, WKScriptMessageHandlerWithReply, WKNavigationDelegate
         return nil
     }
 
-    // 麥克風（錄聲音範本）：系統會先問一次 App 的麥克風權限，網頁這邊直接允許
+    // 麥克風（錄聲音範本）、相機（掃描權杖 QR Code）：系統會先問一次 App 的權限，網頁這邊直接允許
     func webView(_ w: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin, initiatedByFrame frame: WKFrameInfo,
                  type: WKMediaCaptureType, decisionHandler: @escaping (WKPermissionDecision) -> Void) {
-        decisionHandler(origin.host == "127.0.0.1" && type == .microphone ? .grant : .deny)
+        decisionHandler(origin.host == "127.0.0.1" ? .grant : .deny)
     }
 
     // 網頁的 alert / confirm / prompt（刪除確認、取名字）

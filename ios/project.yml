@@ -47,6 +47,7 @@ targets:
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         NSMicrophoneUsageDescription: 錄下自己的聲音當聲音範本
+        NSCameraUsageDescription: 掃描電腦上的權杖 QR Code
         UIFileSharingEnabled: true
 schemes:
   XiaokeTTS:

@@ -40,6 +40,7 @@ public class MainActivity extends Activity {
     Bridge bridge;
     ValueCallback<Uri[]> fileCallback;
     PermissionRequest pendingMic;
+    String[] pendingRes;
     long lastBack = 0;
 
     @Override
@@ -103,18 +104,22 @@ public class MainActivity extends Activity {
                 return true;
             }
 
-            /** 網頁要用麥克風（錄聲音範本）：先問 Android 的錄音權限，再允許網頁使用 */
+            /** 網頁要用麥克風（錄聲音範本）或相機（掃描權杖 QR Code）：先問 Android 的權限，再允許網頁使用 */
             @Override
             public void onPermissionRequest(final PermissionRequest r) {
-                boolean audio = false;
-                for (String res : r.getResources()) if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(res)) audio = true;
-                if (!audio) { r.deny(); return; }
-                if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                    r.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE});
-                } else {
-                    pendingMic = r;
-                    requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQ_MIC);
+                java.util.List<String> res = new java.util.ArrayList<>(), need = new java.util.ArrayList<>();
+                for (String x : r.getResources()) {
+                    String p = PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(x) ? Manifest.permission.RECORD_AUDIO
+                            : PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(x) ? Manifest.permission.CAMERA : null;
+                    if (p == null) continue;
+                    res.add(x);
+                    if (checkSelfPermission(p) != PackageManager.PERMISSION_GRANTED) need.add(p);
                 }
+                if (res.isEmpty()) { r.deny(); return; }
+                if (need.isEmpty()) { r.grant(res.toArray(new String[0])); return; }
+                pendingMic = r;
+                pendingRes = res.toArray(new String[0]);
+                requestPermissions(need.toArray(new String[0]), REQ_MIC);
             }
 
             @Override
@@ -130,8 +135,10 @@ public class MainActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int req, String[] perms, int[] res) {
         if (req == REQ_MIC && pendingMic != null) {
-            if (res.length > 0 && res[0] == PackageManager.PERMISSION_GRANTED) pendingMic.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE});
-            else { pendingMic.deny(); Toast.makeText(this, "沒有錄音權限：可以改用「上傳」聲音檔", Toast.LENGTH_LONG).show(); }
+            boolean all = res.length > 0;
+            for (int g : res) if (g != PackageManager.PERMISSION_GRANTED) all = false;
+            if (all) pendingMic.grant(pendingRes);
+            else { pendingMic.deny(); Toast.makeText(this, "沒有取得權限：可以到手機的「設定 → 應用程式 → 小柯語音 → 權限」打開", Toast.LENGTH_LONG).show(); }
             pendingMic = null;
         }
     }

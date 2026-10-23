@@ -10,6 +10,7 @@ import { AMBIENCES, AMB_ALIASES, SFX, makeAmbience, makeSfx } from "./sounds.js"
 import * as P from "./project.js";
 import { tagMp3, coverJpeg } from "./id3.js";
 import { Desktop, whenAppReady, appSave, openExternal, cmpVersion, readClipboard } from "./desktop.js";
+import { showTokenQR, scanTokenQR } from "./qrtoken.js";
 
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -768,6 +769,11 @@ async function verifyToken() {
 $("#sToken").onchange = e => setToken(e.target.value);
 // 長按「貼上」後馬上檢查，不用再按其他地方
 $("#sToken").oninput = e => { if (/hf_[A-Za-z0-9]{20,}/.test(e.target.value)) setToken(e.target.value); };
+$("#sTokenQR").onclick = () => S.hfToken ? showTokenQR(S.hfToken).catch(e => toast(e.message)) : toast("這台裝置還沒有權杖：先貼上權杖，才能傳到手機");
+$("#sTokenScan").onclick = async () => {
+  try { const t = await scanTokenQR(); if (t) { await setToken(t); toast("已從 QR Code 帶入權杖"); } }
+  catch (e) { toast(e.message, 4000); }
+};
 $("#sTokenEye").onclick = () => { const i = $("#sToken"); i.type = i.type === "password" ? "text" : "password"; };
 $("#sTokenClear").onclick = () => { if (confirm("清除權杖？")) setToken(""); };
 $("#sTokenPaste").onclick = async () => {
