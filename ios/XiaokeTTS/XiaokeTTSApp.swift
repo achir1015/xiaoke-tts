@@ -116,6 +116,9 @@ final class Web: NSObject, WKScriptMessageHandlerWithReply, WKNavigationDelegate
             try? sv.handle.close()
             // 打開分享選單：「儲存到檔案」、AirDrop、LINE…
             share(sv.url) { done in replyHandler(done ? ["status": "ok", "path": sv.name] : ["status": "declined"], nil) }
+        case "read_clipboard":
+            // 系統會問一次「允許貼上嗎？」
+            replyHandler(["status": "ok", "text": UIPasteboard.general.string ?? ""], nil)
         case "open_url":
             if let u = URL(string: s(0)), ["achir1015.github.io", "github.com", "huggingface.co"].contains(u.host ?? "") { UIApplication.shared.open(u) }
             replyHandler(true, nil)

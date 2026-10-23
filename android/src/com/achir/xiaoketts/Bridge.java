@@ -1,6 +1,8 @@
 package com.achir.xiaoketts;
 
 import android.app.DownloadManager;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.BroadcastReceiver;
 import android.content.ContentResolver;
 import android.content.ContentValues;
@@ -155,6 +157,26 @@ final class Bridge {
             }
             return ok("path", s.shown, "size", s.size);
         } catch (Exception e) { return err(e); }
+    }
+
+    /** 讀剪貼簿（WebView 裡的網頁讀不到 Android 的剪貼簿，改由 App 讀；Android 10 以上 App 在前景才讀得到） */
+    @JavascriptInterface
+    public String readClipboard() {
+        final String[] out = {""};
+        final java.util.concurrent.CountDownLatch done = new java.util.concurrent.CountDownLatch(1);
+        a.runOnUiThread(() -> {
+            try {
+                ClipboardManager cm = (ClipboardManager) a.getSystemService(Context.CLIPBOARD_SERVICE);
+                ClipData c = cm == null ? null : cm.getPrimaryClip();
+                if (c != null && c.getItemCount() > 0) {
+                    CharSequence t = c.getItemAt(0).coerceToText(a);
+                    if (t != null) out[0] = t.toString();
+                }
+            } catch (Exception ignored) { }
+            done.countDown();
+        });
+        try { done.await(3, java.util.concurrent.TimeUnit.SECONDS); } catch (InterruptedException ignored) { }
+        return ok("text", out[0]);
     }
 
     @JavascriptInterface

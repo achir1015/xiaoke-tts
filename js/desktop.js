@@ -15,6 +15,7 @@ const androidApi = {
   install_update: async (url, ver) => J(A().installUpdate(url, ver)),
   update_status: async () => J(A().updateStatus()),
   open_url: async url => A().openUrl(url),
+  read_clipboard: async () => J(A().readClipboard()),
 };
 
 const I = () => window.XiaokeIOS && window.webkit?.messageHandlers?.xkt;
@@ -61,6 +62,15 @@ export async function appSave(filename, blob, ask = false) {
   return e.path;
 }
 export const desktopSave = appSave;   // 自我測試用的舊名稱
+
+/** 讀剪貼簿：App 版由 App 讀（Android WebView、iPhone 的網頁讀不到），網頁版用瀏覽器的 API */
+export async function readClipboard() {
+  if (Desktop.android || Desktop.ios) {
+    const r = await Desktop.api.read_clipboard();
+    if (r?.status === "ok") return r.text || "";
+  }
+  return navigator.clipboard.readText();
+}
 
 export function openExternal(url) {
   if (Desktop.available) return Desktop.api.open_url(url);

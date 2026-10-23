@@ -9,7 +9,7 @@ import { ScriptParser, NovelConverter, allLines, speakers, mixScript, TEMPLATES 
 import { AMBIENCES, AMB_ALIASES, SFX, makeAmbience, makeSfx } from "./sounds.js";
 import * as P from "./project.js";
 import { tagMp3, coverJpeg } from "./id3.js";
-import { Desktop, whenAppReady, appSave, openExternal, cmpVersion } from "./desktop.js";
+import { Desktop, whenAppReady, appSave, openExternal, cmpVersion, readClipboard } from "./desktop.js";
 
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -743,7 +743,10 @@ async function engineChanged() {
 }
 $$("input[name=engine]").forEach(r => r.onchange = async () => { await save({ engine: r.value }); engineChanged(); });
 async function setToken(v) {
+  // 複製時常帶到空白、換行或前後的文字：只取出 hf_ 開頭那一串
   v = (v || "").trim().replace(/^Bearer\s+/i, "");
+  const m = v.match(/hf_[A-Za-z0-9]{20,}/);
+  if (m) v = m[0];
   $("#sToken").value = v;
   await save({ hfToken: v });
   engine = makeEngine(engineOpts()); renderLang();
@@ -763,11 +766,13 @@ async function verifyToken() {
   } catch { msg.textContent = "已儲存（暫時無法向 Hugging Face 確認，網路可能不穩）。"; }
 }
 $("#sToken").onchange = e => setToken(e.target.value);
+// 長按「貼上」後馬上檢查，不用再按其他地方
+$("#sToken").oninput = e => { if (/hf_[A-Za-z0-9]{20,}/.test(e.target.value)) setToken(e.target.value); };
 $("#sTokenEye").onclick = () => { const i = $("#sToken"); i.type = i.type === "password" ? "text" : "password"; };
 $("#sTokenClear").onclick = () => { if (confirm("清除權杖？")) setToken(""); };
 $("#sTokenPaste").onclick = async () => {
   try {
-    const t = await navigator.clipboard.readText();
+    const t = await readClipboard();
     if (!t.trim()) return toast("剪貼簿是空的，請先到 Hugging Face 複製權杖");
     await setToken(t);
   } catch {
