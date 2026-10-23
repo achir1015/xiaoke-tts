@@ -1,10 +1,11 @@
-name: 桌面版建置、測試與發佈（Windows／Mac）
+name: App 建置、測試與發佈（Windows／Mac／Android）
 
-# 推到 main 且 version.json 的版本還沒發佈過：檢查 → Windows、Mac 打包並安裝後自我測試 → 通過後發佈 GitHub Release
+# 推到 main 且 version.json 的版本還沒發佈過：檢查 → Windows、Mac 打包並安裝後自我測試、Android 建置 APK → 通過後發佈 GitHub Release
+# 版本已發佈過：只測試；Android APK 會直接補上（覆蓋）到那個版本的 Release
 on:
   push:
     branches: [main]
-    paths: ['index.html', 'version.json', 'sw.js', 'css/**', 'js/**', 'vendor/**', 'icons/**', 'voices/**', 'desktop/**', '.github/workflows/desktop.yml']
+    paths: ['index.html', 'version.json', 'sw.js', 'css/**', 'js/**', 'vendor/**', 'icons/**', 'voices/**', 'samples/**', 'desktop/**', 'android/**', '.github/workflows/desktop.yml']
   workflow_dispatch:
 
 permissions:
@@ -36,7 +37,7 @@ jobs:
           mkdir -p /tmp/chk
           for f in js/*.js; do cp "$f" /tmp/chk/$(basename "$f" .js).mjs; node --check /tmp/chk/$(basename "$f" .js).mjs || exit 1; done
           node --check sw.js
-          python3 -m py_compile desktop/app.py tools/sync_voices.py tools/make_icons.py
+          python3 -m py_compile desktop/app.py tools/sync_voices.py tools/make_icons.py android/build.py
 
   windows:
     name: Windows
@@ -174,9 +175,50 @@ jobs:
             *.dmg
             test-output/
 
+  android:
+    name: Android
+    needs: check
+    runs-on: ubuntu-latest
+    env:
+      # 簽章憑證的 SHA-256（公開資訊）：每次都要用同一把金鑰，手機上的 App 才能直接更新
+      CERT_SHA256: 559772f1a3b59c917d1e262e5a4cc4b2f95078fe929f26a02cdb0b77344cdf24
+      APK: XiaokeTTS-Android-${{ needs.check.outputs.ver }}.apk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - name: 簽章金鑰（repo Secret：ANDROID_KEYSTORE_B64）
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          [ -n "$KS" ] || { echo "::error::缺少 ANDROID_KEYSTORE_B64 Secret"; exit 1; }
+          echo "$KS" | base64 -d > android/xiaoketts.jks
+          echo "sdk.dir=$ANDROID_HOME" > android/local.properties
+      - name: 建置 APK
+        run: |
+          python3 android/build.py
+          mv android/build/XiaokeTTS.apk "$APK"
+          ls -lh "$APK"
+      - name: 確認簽章與版本
+        run: |
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          FP=$("$BT/apksigner" verify --print-certs "$APK" | grep -m1 "SHA-256 digest" | awk '{print $NF}')
+          [ "$FP" = "$CERT_SHA256" ] || { echo "::error::APK 簽章和手機上的 App 不一樣（$FP），裝了會無法更新"; exit 1; }
+          "$BT/aapt2" dump badging "$APK" | grep -m1 "versionName='${{ needs.check.outputs.ver }}'" || { echo "::error::APK 版本號不對"; exit 1; }
+          rm -f android/xiaoketts.jks
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: ${{ env.APK }}
+      - name: 已發佈的版本：直接補上 APK
+        if: needs.check.outputs.released == 'yes' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "v${{ needs.check.outputs.ver }}" "$APK" --clobber --repo "$GITHUB_REPOSITORY"
+
   release:
     name: 發佈到 GitHub Releases
-    needs: [check, windows, mac]
+    needs: [check, windows, mac, android]
     if: success() && github.ref == 'refs/heads/main' && needs.check.outputs.released == 'no'
     runs-on: ubuntu-latest
     steps:
@@ -188,6 +230,7 @@ jobs:
           mkdir release
           cp artifacts/windows/dist-installer/*.exe release/
           cp artifacts/mac-*/*.dmg release/ 2>/dev/null || true
+          cp artifacts/android/*.apk release/
           ls -lh release
           python3 - <<'EOF'
           import json

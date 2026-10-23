@@ -49,7 +49,7 @@
 - 內建聲音：`python tools/sync_voices.py`（從 indextts2-taiwan-tts 抓檔名有年齡、性別的 mp3）
 - 發佈：改 `version.json`（版本與更新內容）、`js/version.js`、`sw.js` 快取名稱 → 推 main，GitHub Actions 自動打包 Windows／Mac 並建立 Release
 - 桌面版：`desktop/app.py`（pywebview：Windows＝WebView2、Mac＝Qt WebEngine），`desktop/app.py --selftest 報告.json` 自我測試
-- Android：`python android/build.py`（不用 Gradle；需要 JDK 17、Android SDK），APK 手動上傳到 Release
+- Android：`python android/build.py`（不用 Gradle；需要 JDK 17、Android SDK）。發佈時 GitHub Actions 用 repo Secret `ANDROID_KEYSTORE_B64`（簽章金鑰）自動建置並附上 APK
 - iPhone：在 Mac 上 `bash ios/sync.sh` 產生 Xcode 專案（需要 xcodegen）
 
 ## 授權與致謝
